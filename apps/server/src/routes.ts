@@ -1,7 +1,8 @@
 import { Router } from "express";
 import type { WebhookRegistry } from "./registry.js";
+import type { EventEngine } from "@orbital/pulse-core";
 
-export function createRoutes(registry: WebhookRegistry): Router {
+export function createRoutes(registry: WebhookRegistry, engine: EventEngine): Router {
   const router = Router();
 
   // Register a webhook
@@ -42,6 +43,41 @@ export function createRoutes(registry: WebhookRegistry): Router {
   // List all registrations
   router.get("/webhooks", (_req, res) => {
     res.status(200).json(registry.list());
+  });
+
+  // SSE endpoint — browser connects here to receive live events
+  router.get("/events/:address", (req, res) => {
+    const { address } = req.params;
+
+    // Set SSE headers
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Connection", "keep-alive");
+    res.flushHeaders();
+
+    // Subscribe to pulse-core
+    const watcher = engine.subscribe(address);
+
+    // Send events to browser
+    const handler = (event: unknown) => {
+      res.write(`data: ${JSON.stringify(event)}\n\n`);
+    };
+
+    watcher.on("*", handler);
+
+    // Send a heartbeat every 30s to keep connection alive
+    const heartbeat = setInterval(() => {
+      res.write(`: heartbeat\n\n`);
+    }, 30000);
+
+    // Cleanup when browser disconnects
+    req.on("close", () => {
+      clearInterval(heartbeat);
+      watcher.removeListener("*", handler);
+      console.log(`[sse] Client disconnected from ${address}`);
+    });
+
+    console.log(`[sse] Client connected to ${address}`);
   });
 
   return router;
