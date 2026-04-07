@@ -56,7 +56,8 @@ export class EventEngine {
       return existingWatcher;
     }
 
-    const watcher = new Watcher(address, () => {
+    const watcher = new Watcher(address);
+    watcher.addStopHandler(() => {
       this.registry.delete(address);
     });
     this.registry.set(address, watcher);

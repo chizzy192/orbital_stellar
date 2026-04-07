@@ -13,14 +13,14 @@ concurrency:
 jobs:
   release:
     runs-on: ubuntu-latest
-
     permissions:
       contents: write
-
+      packages: write
+      id-token: write
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0   # full history needed for changelog generation
+          fetch-depth: 0
 
       - uses: pnpm/action-setup@v4
         with:
@@ -30,6 +30,8 @@ jobs:
         with:
           node-version: 20
           cache: pnpm
+          # registry-url is needed when the npm publish step is uncommented
+          registry-url: https://registry.npmjs.org
 
       # ── Build and test gate ───────────────────────────────────────────────
       # The release is aborted if any of these steps fail — a broken build
@@ -62,3 +64,12 @@ jobs:
           generate_release_notes: true
           draft: false
           prerelease: ${{ contains(github.ref_name, '-') }}
+
+      # ── npm publish ───────────────────────────────────────────────────────
+      # Uncomment when packages are ready to publish.
+      # Requires NPM_TOKEN to be added to GitHub secrets first.
+      #
+      # - name: Publish packages to npm
+      #   run: pnpm -r --filter './packages/*' publish --access public --no-git-checks
+      #   env:
+      #     NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

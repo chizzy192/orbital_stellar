@@ -13,7 +13,8 @@ concurrency:
 jobs:
   audit:
     runs-on: ubuntu-latest
-
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
 
@@ -34,4 +35,6 @@ jobs:
 
       - name: Print full audit report
         if: always()
+        # || true is intentional — prints the full report without failing the job
+        # The audit-level=high step above is the actual gate
         run: pnpm audit --json || true
