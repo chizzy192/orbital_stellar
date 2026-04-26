@@ -1,5 +1,6 @@
-import { createHmac, timingSafeEqual } from "crypto";
 import type { NormalizedEvent, Watcher } from "@orbital/pulse-core";
+import { createHmac, timingSafeEqual } from "crypto";
+
 import type { WebhookConfig } from "./types.js";
 export type { WebhookConfig } from "./types.js";
 
@@ -12,6 +13,7 @@ type ResolvedWebhookConfig = Omit<Required<WebhookConfig>, "url"> & {
 export class WebhookDelivery {
   private config: ResolvedWebhookConfig;
   private watcher: Watcher;
+  // Shared across URLs so watcher.stop() can cancel every pending retry in one pass.
   private retryTimers: Set<ReturnType<typeof setTimeout>> = new Set();
 
   constructor(watcher: Watcher, config: WebhookConfig) {
@@ -36,7 +38,7 @@ export class WebhookDelivery {
     });
   }
 
-  private async deliverToUrl(
+  private async deliverToUrl (
     event: NormalizedEvent,
     url: string,
     attempt = 1
@@ -91,14 +93,14 @@ export class WebhookDelivery {
     }
   }
 
-  private clearRetryTimers(): void {
+  private clearRetryTimers (): void {
     for (const retryTimer of this.retryTimers) {
       clearTimeout(retryTimer);
     }
     this.retryTimers.clear();
   }
 
-  private getErrorMessage(err: unknown): string {
+  private getErrorMessage (err: unknown): string {
     if (err instanceof Error && err.name === "AbortError") {
       return `Delivery timed out after ${this.config.deliveryTimeoutMs}ms`;
     }
@@ -106,7 +108,7 @@ export class WebhookDelivery {
     return err instanceof Error ? err.message : "Unknown error";
   }
 
-  private sign(payload: string): string {
+  private sign (payload: string): string {
     return createHmac("sha256", this.config.secret)
       .update(payload)
       .digest("hex");
@@ -115,7 +117,7 @@ export class WebhookDelivery {
 
 // --- verifyWebhook ---
 
-export function verifyWebhook(
+export function verifyWebhook (
   payload: string,
   signature: string,
   secret: string
