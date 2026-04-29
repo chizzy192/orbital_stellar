@@ -37,7 +37,7 @@ const registry = new WebhookRegistry(engine);
 
 const app = express();
 app.use(express.json({ limit: "16kb" }));
-app.use(createRoutes(registry, engine));
+app.use("/v1", createRoutes(registry, engine));
 
 app.get("/health", (_req: Request, res: Response) => {
   res.json({ status: "ok", network: NETWORK });
