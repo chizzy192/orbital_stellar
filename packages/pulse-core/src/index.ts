@@ -12,6 +12,11 @@ export type PaymentEventType =
   | "payment.self";
 /** Event type for account options changes. */
 export type AccountOptionsEventType = "account.options_changed";
+/** Event types for trustline lifecycle events (added, removed, or limit updated). */
+export type TrustlineEventType =
+  | "trustline.added"
+  | "trustline.removed"
+  | "trustline.updated";
 /** Notification types emitted by the EventEngine during reconnection. */
 export type WatcherNotificationType =
   | "engine.reconnecting"
@@ -87,9 +92,30 @@ export type AccountOptionsEvent = {
 };
 
 /**
+ * A normalized trustline lifecycle event from the Stellar network.
+ */
+export type TrustlineEvent = {
+  /** The type of trustline event (added, removed, or updated). */
+  type: TrustlineEventType;
+  /** The Stellar account whose trustline changed. */
+  account: string;
+  /** The asset for the trustline (e.g., "USDC:GISSUER" or "XLM"). */
+  asset: string;
+  /** The trustline limit as a string (Horizon scaled int64). */
+  limit: string;
+  /** ISO 8601 timestamp of the trustline change. */
+  timestamp: string;
+  /** The original raw record from the Horizon API. */
+  raw: unknown;
+};
+
+/**
  * A union of all normalized events supported by pulse-core.
  */
-export type NormalizedEvent = PaymentEvent | AccountOptionsEvent;
+export type NormalizedEvent =
+  | PaymentEvent
+  | AccountOptionsEvent
+  | TrustlineEvent;
 
 /**
  * A notification emitted by the EventEngine during reconnection attempts.

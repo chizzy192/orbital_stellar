@@ -3,20 +3,24 @@ import { Watcher } from "./Watcher.js";
 import type {
   AccountOptionsChanges,
   AccountOptionsEvent,
-  AccountOptionsEventType,
   CoreConfig,
   Network,
   NormalizedEvent,
   PaymentEvent,
   PaymentEventType,
   ReconnectConfig,
+  TrustlineEvent,
+  TrustlineEventType,
   WatcherNotification,
   WatcherNotificationType,
 } from "./index.js";
 import { UnknownNetworkError } from "./index.js";
 
 type PendingPaymentEvent = Omit<PaymentEvent, "type"> & { type: "unknown" };
-type NormalizedEventOrPending = PendingPaymentEvent | AccountOptionsEvent;
+type NormalizedEventOrPending =
+  | PendingPaymentEvent
+  | AccountOptionsEvent
+  | TrustlineEvent;
 
 type StreamCallbacks = {
   onmessage: (record: unknown) => void;
@@ -37,6 +41,8 @@ const DEFAULT_RECONNECT: Required<ReconnectConfig> = {
   maxDelayMs: 30000,
   maxRetries: Number.POSITIVE_INFINITY,
 };
+
+const STELLAR_MAX_TRUSTLINE_LIMIT = "922337203685.4775807";
 
 const noop = { info: () => {}, warn: () => {}, error: () => {} };
 
@@ -277,7 +283,59 @@ export class EventEngine {
       return this.normalizeSetOptions(r, record);
     }
 
+    if (r.type === "change_trust") {
+      return this.normalizeChangeTrust(r, record);
+    }
+
     return null;
+  }
+
+  private normalizeChangeTrust(
+    r: Record<string, unknown>,
+    raw: unknown
+  ): TrustlineEvent | null {
+    if (typeof r.source_account !== "string") {
+      return null;
+    }
+
+    if (typeof r.created_at !== "string") {
+      return null;
+    }
+
+    if (typeof r.limit !== "string" && typeof r.limit !== "number") {
+      return null;
+    }
+
+    const asset =
+      r.asset_type === "native"
+        ? "XLM"
+        : `${r.asset_code as string}:${r.asset_issuer as string}`;
+    const limit = String(r.limit);
+
+    return {
+      type: this.resolveTrustlineEventType(limit),
+      account: r.source_account,
+      asset,
+      limit,
+      timestamp: r.created_at,
+      raw,
+    };
+  }
+
+  private resolveTrustlineEventType(limit: string): TrustlineEventType {
+    if (this.isZeroTrustlineLimit(limit)) {
+      return "trustline.removed";
+    }
+
+    if (limit === STELLAR_MAX_TRUSTLINE_LIMIT) {
+      return "trustline.added";
+    }
+
+    return "trustline.updated";
+  }
+
+  private isZeroTrustlineLimit(limit: string): boolean {
+    return /^0(?:\.0+)?$/.test(limit);
   }
 
   private normalizeSetOptions(
@@ -331,6 +389,23 @@ export class EventEngine {
         watcher.emit("account.options_changed", event);
         watcher.emit("*", event);
       }
+      return;
+    }
+
+    if (
+      event.type === "trustline.added" ||
+      event.type === "trustline.removed" ||
+      event.type === "trustline.updated"
+    ) {
+      const watcher = this.registry.get(event.account);
+      if (watcher) {
+        watcher.emit(event.type, event);
+        watcher.emit("*", event);
+      }
+      return;
+    }
+
+    if (event.type !== "unknown") {
       return;
     }
 
